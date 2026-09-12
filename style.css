@@ -1,15 +1,15 @@
 :root {
   --bg-white: #ffffff;
-  --bg-offwhite: #f8f9fc;
-  --primary-purple: #6c3ce9;
-  --light-purple: #f1edfe;
-  --dark-purple: #4922a8;
-  --text-dark: #1e293b;
-  --text-muted: #64748b;
-  --border-color: #e2e8f0;
-  --card-shadow: 0 10px 25px -5px rgba(108, 60, 233, 0.07);
+  --bg-offwhite: #faf9fd;               /* Subtle warm off-white */
+  --primary-purple: #c3b1e1;            /* Pastel Purple */
+  --primary-purple-hover: #b19cd9;      /* Slightly deeper pastel purple for hover */
+  --dark-purple: #4a3b63;               /* High-contrast purple for text accessibility */
+  --light-purple: #f3effa;              /* Soft tint for badges and tags */
+  --text-dark: #22252a;
+  --text-muted: #626875;
+  --border-color: #e8e3f0;
+  --card-shadow: 0 10px 25px -5px rgba(195, 177, 225, 0.25);
 }
-
 * {
   margin: 0;
   padding: 0;
@@ -105,33 +105,40 @@ body {
 }
 
 /* Buttons */
-.btn-primary, .btn-secondary, .btn-nav {
-  display: inline-block;
-  padding: 0.65rem 1.4rem;
-  border-radius: 8px;
-  text-decoration: none;
-  font-weight: 600;
-  transition: all 0.2s ease;
-}
-
 .btn-primary, .btn-nav {
   background: var(--primary-purple);
-  color: #fff !important;
+  color: #22252a !important; /* Dark text for contrast against pastel purple */
 }
 
 .btn-primary:hover, .btn-nav:hover {
-  background: var(--dark-purple);
+  background: var(--primary-purple-hover);
 }
 
 .btn-secondary {
   background: var(--light-purple);
-  color: var(--primary-purple);
+  color: var(--dark-purple);
 }
 
 .btn-secondary:hover {
-  background: #e4dcfe;
+  background: #e8e0f5;
 }
 
+.tag {
+  background: var(--light-purple);
+  color: var(--dark-purple);
+}
+
+.timeline-dot {
+  background: var(--primary-purple);
+}
+
+.timeline-date {
+  color: var(--dark-purple);
+}
+
+.social-links a:hover {
+  color: var(--primary-purple-hover);
+}
 /* Hero Section */
 .hero {
   padding: 6rem 0 4rem;

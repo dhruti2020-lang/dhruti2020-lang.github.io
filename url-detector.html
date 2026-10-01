@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fake & Phishing URL Classifier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen py-10 px-4">
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <!-- Navigation back to Portfolio -->
+        <div class="flex justify-between items-center pb-4 border-b border-slate-800">
+            <a href="index.html" class="text-xs font-semibold text-indigo-400 hover:text-indigo-300 transition flex items-center gap-1">
+                &larr; Back to Portfolio
+            </a>
+            <span class="text-xs text-slate-500 uppercase tracking-widest font-mono">Powered by FastAPI & LightGBM</span>
+        </div>
+
+        <header class="text-center space-y-2">
+            <h1 class="text-3xl font-bold tracking-tight text-indigo-400">Fake & Phishing URL Classifier</h1>
+            <p class="text-slate-400 text-sm">Real-time Lexical ML Evaluation, Protocol Security Check & RDAP Intelligence</p>
+        </header>
+
+        <!-- Input Box -->
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-xl">
+            <form id="urlForm" class="flex flex-col sm:flex-row gap-3">
+                <input type="text" id="urlInput" required
+                       placeholder="Enter target URL (e.g. google.com or http://192.168.1.1/login)"
+                       class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 text-slate-100">
+                <button type="submit" id="submitBtn"
+                        class="bg-indigo-600 hover:bg-indigo-500 font-semibold px-6 py-3 rounded-lg text-sm transition">
+                    Analyze URL
+                </button>
+            </form>
+        </div>
+
+        <!-- Insecure Banner -->
+        <div id="httpsWarningBox" class="hidden bg-amber-950/80 border border-amber-600 text-amber-200 p-4 rounded-xl flex items-start gap-3">
+            <span class="text-2xl">⚠️</span>
+            <div>
+                <h4 class="font-bold">Insecure Connection Warning (Non-HTTPS)</h4>
+                <p id="httpsWarningText" class="text-sm text-amber-300 mt-0.5"></p>
+            </div>
+        </div>
+
+        <!-- Result Card -->
+        <div id="resultCard" class="hidden space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 md:col-span-2">
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Analysis Verdict</h3>
+                    <div class="mt-2 flex items-baseline gap-3">
+                        <span id="verdictBadge" class="px-3 py-1 text-sm font-bold rounded-md"></span>
+                        <span class="text-slate-400 text-sm">Risk Score: <strong id="riskScore" class="text-white"></strong>%</span>
+                    </div>
+                    
+                    <p id="detectionSourceDisplay" class="text-xs text-indigo-300 font-semibold mt-2"></p>
+                    <div id="reputationBox" class="mt-2 bg-slate-900/60 p-2.5 rounded border border-slate-700 hidden"></div>
+
+                    <p id="analyzedUrl" class="text-xs text-slate-400 mt-3 break-all font-mono"></p>
+                    
+                    <div class="mt-6 pt-4 border-t border-slate-700 flex flex-wrap gap-2">
+                        <button type="button" onclick="reportFalsePositive()" class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-2 rounded font-medium text-slate-200">
+                            Flag False Positive (Is Legitimate)
+                        </button>
+                        <button type="button" onclick="reportFalseNegative()" class="bg-slate-700 hover:bg-slate-600 text-xs px-3 py-2 rounded font-medium text-red-300">
+                            Flag False Negative (Is Phishing)
+                        </button>
+                    </div>
+                    <p id="feedbackNotice" class="text-xs text-emerald-400 mt-2 hidden"></p>
+                </div>
+
+                <div class="bg-slate-800 border border-slate-700 rounded-xl p-5 flex flex-col justify-center">
+                    <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400">Domain Age Check</h3>
+                    <div id="domainAgeDisplay" class="mt-2 text-xl font-bold text-slate-200">--</div>
+                    <p class="text-xs text-slate-500 mt-1">Newly registered domains (&lt; 30 days) indicate higher risk.</p>
+                </div>
+            </div>
+
+            <!-- WHOIS / RDAP Card -->
+            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+                <h3 class="text-sm font-semibold uppercase tracking-wider text-indigo-300 mb-4">Domain Registration Intelligence (RDAP/WHOIS)</h3>
+                <div id="whoisContent" class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const API_BASE = "https://fake-url-api.onrender.com";
+        let currentUrl = "";
+
+        const formEl = document.getElementById("urlForm");
+        const urlInputEl = document.getElementById("urlInput");
+        const submitBtnEl = document.getElementById("submitBtn");
+
+        formEl.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const urlVal = urlInputEl.value.trim();
+            if (!urlVal) return;
+
+            currentUrl = urlVal;
+            submitBtnEl.disabled = true;
+            submitBtnEl.innerText = "Analyzing...";
+
+            const feedbackEl = document.getElementById("feedbackNotice");
+            if (feedbackEl) feedbackEl.classList.add("hidden");
+
+            try {
+                const res = await fetch(`${API_BASE}/api/analyze`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: urlVal })
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.detail || ("Server returned HTTP " + res.status));
+                }
+
+                const data = await res.json();
+                renderResults(data);
+            } catch (err) {
+                console.error(err);
+                alert("Inspection request failed. (Note: Render free instances may take ~30-40 seconds to spin up on initial query). Details: " + err.message);
+            } finally {
+                submitBtnEl.disabled = false;
+                submitBtnEl.innerText = "Analyze URL";
+            }
+        });
+
+        function renderResults(data) {
+            document.getElementById("resultCard").classList.remove("hidden");
+            document.getElementById("analyzedUrl").innerText = data.url;
+
+            // Protocol Warning
+            const httpsBox = document.getElementById("httpsWarningBox");
+            if (data.https_warning) {
+                document.getElementById("httpsWarningText").innerText = data.https_warning;
+                httpsBox.classList.remove("hidden");
+            } else {
+                httpsBox.classList.add("hidden");
+            }
+
+            // Status Badge
+            const badge = document.getElementById("verdictBadge");
+            badge.innerText = data.status;
+            if (data.status.indexOf("High-Risk") !== -1) {
+                badge.className = "px-3 py-1 text-sm font-bold rounded-md bg-red-950 text-red-300 border border-red-700";
+            } else if (data.status.indexOf("Suspicious") !== -1) {
+                badge.className = "px-3 py-1 text-sm font-bold rounded-md bg-amber-950 text-amber-300 border border-amber-700";
+            } else {
+                badge.className = "px-3 py-1 text-sm font-bold rounded-md bg-emerald-950 text-emerald-300 border border-emerald-700";
+            }
+
+            document.getElementById("riskScore").innerText = data.risk_score;
+
+            // Source indicator
+            const sourceEl = document.getElementById("detectionSourceDisplay");
+            if (sourceEl) {
+                sourceEl.innerText = data.detection_source ? ("Evaluated via: " + data.detection_source) : "";
+            }
+
+            // Reputation indicator
+            const repBox = document.getElementById("reputationBox");
+            if (repBox) {
+                if (data.reputation && data.reputation.queried) {
+                    const malCount = data.reputation.malicious_count || 0;
+                    const cleanCount = data.reputation.harmless_count || 0;
+                    const colorClass = malCount > 0 ? "text-red-400 font-bold" : "text-emerald-400";
+                    
+                    repBox.innerHTML = 
+                        '<div class="text-xs text-slate-300">' +
+                        '<strong>Security Engine Detections: </strong>' +
+                        '<span class="' + colorClass + '">' + malCount + ' flagged malicious</span> ' +
+                        'out of ' + (malCount + cleanCount) + ' checked engines' +
+                        '</div>';
+                    repBox.classList.remove("hidden");
+                } else {
+                    repBox.classList.add("hidden");
+                }
+            }
+
+            // Domain Age
+            const domainAgeEl = document.getElementById("domainAgeDisplay");
+            if (data.whois && data.whois.domain_age_days !== null && data.whois.domain_age_days !== undefined) {
+                domainAgeEl.innerText = data.whois.domain_age_days + " Days Old";
+                domainAgeEl.className = data.whois.domain_age_days < 30 ? "mt-2 text-xl font-bold text-red-400" : "mt-2 text-xl font-bold text-emerald-400";
+            } else {
+                domainAgeEl.innerText = "Unknown";
+                domainAgeEl.className = "mt-2 text-xl font-bold text-slate-400";
+            }
+
+            // WHOIS table
+            const whoisGrid = document.getElementById("whoisContent");
+            const whois = data.whois || {};
+            if (whois.error) {
+                whoisGrid.innerHTML = '<div class="col-span-2 text-slate-400 italic">' + whois.error + '</div>';
+            } else {
+                whoisGrid.innerHTML = 
+                    '<div><span class="text-slate-500">Registrar:</span> <span class="font-medium text-slate-200">' + (whois.registrar || "Unavailable") + '</span></div>' +
+                    '<div><span class="text-slate-500">Organization:</span> <span class="font-medium text-slate-200">' + (whois.org || "Unavailable") + '</span></div>' +
+                    '<div><span class="text-slate-500">Creation Date:</span> <span class="font-medium text-slate-200">' + (whois.creation_date || "Unavailable") + '</span></div>' +
+                    '<div><span class="text-slate-500">Country:</span> <span class="font-medium text-slate-200">' + (whois.country || "Unavailable") + '</span></div>';
+            }
+        }
+
+        async function sendFeedback(isFalsePositive) {
+            if (!currentUrl) return;
+            try {
+                const res = await fetch(`${API_BASE}/api/feedback`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        url: currentUrl,
+                        is_false_positive: isFalsePositive,
+                        comment: isFalsePositive ? "User flagged legitimate" : "User flagged phishing"
+                    })
+                });
+                const data = await res.json();
+                const notice = document.getElementById("feedbackNotice");
+                if (notice) {
+                    notice.innerText = data.message;
+                    notice.classList.remove("hidden");
+                }
+            } catch (e) {
+                alert("Could not record feedback.");
+            }
+        }
+
+        function reportFalsePositive() { sendFeedback(true); }
+        function reportFalseNegative() { sendFeedback(false); }
+    </script>
+</body>
+</html>
